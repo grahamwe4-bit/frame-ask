@@ -422,3 +422,146 @@
   </script>
 </body>
 </html>
+
+  <script>
+    (() => {
+      const stripeSessionKey = "frameAskStripeSession";
+      const stripeTokenKey = "frameAskAccessToken";
+      const stripeAskForm = document.getElementById("askForm");
+      const stripeMembership = document.createElement("section");
+      stripeMembership.setAttribute("aria-live", "polite");
+      stripeMembership.style.cssText = "margin:16px 0;padding:14px;border:1px solid #e5e7dd;border-radius:11px;background:#f6f7f1";
+      const stripeStatus = document.createElement("strong");
+      stripeStatus.style.cssText = "display:block;color:#41463d;font-size:12px";
+      const stripeDescription = document.createElement("p");
+      stripeDescription.style.cssText = "margin:6px 0 10px;color:#777b73;font-size:11px;line-height:1.5";
+      stripeDescription.textContent = "$15/month. Test mode only: checkout will not charge real money. Cancel any time.";
+      const stripeSubscribe = document.createElement("button");
+      stripeSubscribe.type = "button";
+      stripeSubscribe.textContent = "Subscribe · $15/month";
+      stripeSubscribe.style.cssText = "width:100%;border:0;border-radius:8px;padding:11px 12px;background:#d6ff6b;color:#25291f;font:600 12px inherit;cursor:pointer";
+      const stripeManage = document.createElement("button");
+      stripeManage.type = "button";
+      stripeManage.textContent = "Manage subscription";
+      stripeManage.style.cssText = "width:100%;border:1px solid #daddd3;border-radius:8px;padding:10px 12px;background:#fff;color:#444941;font:600 12px inherit;cursor:pointer";
+      stripeMembership.append(stripeStatus, stripeDescription, stripeSubscribe, stripeManage);
+      stripeAskForm.before(stripeMembership);
+
+      let stripeAccessToken = localStorage.getItem(stripeTokenKey) || "";
+      let stripeSubscribed = false;
+
+      function stripeSync(active, expiry) {
+        stripeSubscribed = active;
+        stripeStatus.textContent = active ? "Subscription active" : "Monthly membership required";
+        stripeDescription.textContent = active
+          ? "Access is active" + (expiry ? " through " + new Date(expiry * 1000).toLocaleDateString() : "") + ". Manage or cancel below."
+          : "$15/month. Test mode only: checkout will not charge real money. Cancel any time.";
+        stripeSubscribe.hidden = active;
+        stripeManage.hidden = !active;
+        questionInput.disabled = !active || !imageFile || isAsking;
+        sendButton.disabled = !active || !imageFile || isAsking;
+        sendLabel.textContent = !active ? "Subscribe to ask" : imageFile ? "Ask ChatGPT about it" : "Choose an image first";
+      }
+
+      async function stripeRequest(path, payload) {
+        const response = await fetch(API_URL + path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Could not complete that request. Please try again.");
+        return result;
+      }
+
+      async function stripeRestore() {
+        const url = new URL(window.location.href);
+        const returnedSession = url.searchParams.get("session_id") || "";
+        const sessionId = returnedSession || localStorage.getItem(stripeSessionKey) || stripeAccessToken;
+        if (url.searchParams.has("session_id") || url.searchParams.has("checkout")) {
+          url.searchParams.delete("session_id");
+          url.searchParams.delete("checkout");
+          window.history.replaceState({}, document.title, url.pathname + url.hash);
+        }
+        if (!sessionId) { stripeSync(false); return; }
+        localStorage.setItem(stripeSessionKey, sessionId);
+        stripeStatus.textContent = "Checking your subscription…";
+        try {
+          const result = await stripeRequest("/api/verify", { sessionId: sessionId });
+          stripeAccessToken = result.accessToken;
+          localStorage.setItem(stripeTokenKey, stripeAccessToken);
+          stripeSync(true, result.expiresAt);
+          announce("Your subscription is active. Ask about an image here.");
+        } catch (error) {
+          stripeAccessToken = "";
+          localStorage.removeItem(stripeTokenKey);
+          stripeSync(false);
+          if (returnedSession || url.searchParams.get("checkout") === "cancelled") announce(error.message);
+        }
+      }
+
+      stripeSubscribe.addEventListener("click", async () => {
+        stripeSubscribe.disabled = true;
+        stripeSubscribe.textContent = "Opening secure checkout…";
+        try {
+          const result = await stripeRequest("/api/checkout", {});
+          const checkoutUrl = new URL(result.url);
+          if (checkoutUrl.hostname !== "checkout.stripe.com") throw new Error("The secure checkout link was not valid.");
+          window.location.assign(checkoutUrl.href);
+        } catch (error) {
+          announce(error.message);
+          stripeSubscribe.disabled = false;
+          stripeSubscribe.textContent = "Subscribe · $15/month";
+        }
+      });
+
+      stripeManage.addEventListener("click", async () => {
+        stripeManage.disabled = true;
+        try {
+          const result = await stripeRequest("/api/manage", { accessToken: stripeAccessToken });
+          const portalUrl = new URL(result.url);
+          if (portalUrl.hostname !== "billing.stripe.com") throw new Error("The subscription settings link was not valid.");
+          window.location.assign(portalUrl.href);
+        } catch (error) {
+          announce(error.message);
+          stripeManage.disabled = false;
+        }
+      });
+
+      window.addEventListener("submit", async event => {
+        if (event.target !== stripeAskForm) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!stripeSubscribed) { announce("Subscribe for $15/month to ask about images. You can still preview images as a guest."); return; }
+        if (!imageFile || isAsking) return;
+        if (imageFile.size > 20 * 1024 * 1024) { announce("This image is over 20 MB. Choose a smaller image and try again."); return; }
+        const question = questionInput.value.trim() || "What is in this image?";
+        const requestFile = imageFile;
+        const requestGeneration = imageGeneration;
+        isAsking = true;
+        stripeSync(true);
+        sendLabel.textContent = "Looking closely…";
+        announce("ChatGPT is looking at your image…");
+        try {
+          const image = await imageAsDataUrl(requestFile);
+          const result = await stripeRequest("/api/ask", { image: image, question: question, history: conversation.slice(-10), accessToken: stripeAccessToken });
+          if (typeof result.answer !== "string" || !result.answer.trim()) throw new Error("ChatGPT returned an empty answer. Please try again.");
+          if (requestGeneration !== imageGeneration || imageFile !== requestFile) return;
+          conversation.push({ role: "user", content: question }, { role: "assistant", content: result.answer });
+          addMessage("user", question);
+          addMessage("assistant", result.answer);
+          questionInput.value = "";
+          announce("Answer ready. Ask a follow-up about the same image.");
+        } catch (error) {
+          if (requestGeneration === imageGeneration && imageFile === requestFile) announce(error.message);
+        } finally {
+          isAsking = false;
+          stripeSync(stripeSubscribed);
+        }
+      }, true);
+
+      new MutationObserver(() => stripeSync(stripeSubscribed)).observe(stage, { attributes: true, attributeFilter: ["class"] });
+      stripeSync(false);
+      stripeRestore();
+    })();
+  </script>
