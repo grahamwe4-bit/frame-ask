@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f3ee">
-  <meta name="description" content="Preview a screenshot, then send it to ChatGPT in a couple of clicks.">
+  <meta name="description" content="Ask ChatGPT about a screenshot and get the answer right here.">
   <title>Frame — see it, ask it</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23171918'/%3E%3Cpath d='M12 17v-5h5M28 17v-5h-5M12 23v5h5M28 23v5h-5' fill='none' stroke='%23d6ff6b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%23d6ff6b'/%3E%3C/svg%3E">
   <style>
@@ -85,6 +85,7 @@
     .chatgpt-mark svg { width: 13px; height: 13px; }
     .ask-card h2 { margin: 25px 0 9px; font-size: 24px; line-height: 1.12; font-weight: 580; letter-spacing: -.045em; }
     .ask-card .description { margin: 0; color: #777b73; font-size: 12px; line-height: 1.65; }
+    .usage-note { margin: 10px 0 0; color: #8a8e84; font-size: 10px; line-height: 1.5; }
     .divider { height: 1px; background: #e8e9e2; margin: 24px 0 20px; }
     .steps { display: grid; gap: 15px; padding: 0; margin: 0; list-style: none; }
     .step { display: grid; grid-template-columns: 25px 1fr; gap: 10px; align-items: start; color: #777b73; font-size: 11px; line-height: 1.5; }
@@ -95,6 +96,15 @@
     .send-button:hover:not(:disabled) { background: #2d322b; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(28,34,24,.15); }
     .send-button:disabled { cursor: not-allowed; opacity: .45; }
     .send-button svg { width: 16px; height: 16px; }
+    .question-label { display: block; margin: 0 0 8px; color: #5f645b; font-size: 11px; font-weight: 620; }
+    .question-input { width: 100%; min-height: 82px; resize: vertical; padding: 12px 13px; border: 1px solid #daddd3; border-radius: 10px; outline: none; background: #fff; color: var(--ink); font: inherit; font-size: 12px; line-height: 1.5; }
+    .question-input:focus { border-color: #9cb45f; box-shadow: 0 0 0 3px rgba(156,180,95,.15); }
+    .question-input::placeholder { color: #a1a49b; }
+    .conversation { display: grid; gap: 9px; max-height: 360px; overflow: auto; margin-top: 15px; }
+    .message { padding: 11px 12px; border-radius: 10px; background: #f0f1eb; }
+    .message.assistant { border: 1px solid #e7e8e1; background: #fff; }
+    .message-label { margin-bottom: 5px; color: #777b73; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .message-body { color: #30342d; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
     .action-note { min-height: 28px; margin: 10px 2px 0; color: #85897f; font-size: 10px; line-height: 1.45; text-align: center; }
     .below { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 19px; color: #8b8e85; font-size: 10px; line-height: 1.5; }
     .below strong { color: #64695f; font-weight: 590; }
@@ -136,7 +146,7 @@
         <span class="brand-name">frame <span>/ ask</span></span>
       </a>
       <div class="topbar-actions">
-        <div class="privacy-tag"><i class="privacy-dot"></i><span>Image stays on this device</span></div>
+        <div class="privacy-tag"><i class="privacy-dot"></i><span>Only sent when you ask</span></div>
         <a class="guest-link" href="#viewer">Continue as guest <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3.5 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       </div>
     </header>
@@ -145,7 +155,7 @@
       <section class="intro" aria-labelledby="page-title">
         <div class="eyebrow"><span class="eyebrow-line"></span>See it. Ask it.</div>
         <h1 id="page-title">A closer look,<br><em>with ChatGPT.</em></h1>
-        <p class="subhead">Drop in a screenshot or photo. No sign-in needed. We’ll help you get it into a ChatGPT chat, ready for your question.</p>
+        <p class="subhead">Drop in a screenshot or photo and ask your question. ChatGPT answers right here, in the same tab.</p>
       </section>
 
       <section class="workspace" id="viewer" aria-label="Screenshot viewer">
@@ -183,24 +193,26 @@
         </div>
 
         <aside class="ask-card" aria-labelledby="ask-title">
-          <div class="ask-topline"><span class="chatgpt-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12.1 3.3a4.2 4.2 0 0 1 4 2.9 4 4 0 0 1 4.3 4 4.1 4.1 0 0 1-.4 7.8 4.1 4.1 0 0 1-7 2.7 4.1 4.1 0 0 1-7-2.7 4.1 4.1 0 0 1-.4-7.8 4 4 0 0 1 4.3-4 4.1 4.1 0 0 1 2.2-2.9Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="m8.2 8.3 7.7 4.4m-7.7 2.9 7.7-4.4m-3.8-4.3v8.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>ChatGPT handoff</div>
-          <h2 id="ask-title">Ready to ask about it?</h2>
-          <p class="description">Your image is copied, then ChatGPT opens in a new tab. Paste it into the message box and ask anything.</p>
+          <div class="ask-topline"><span class="chatgpt-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12.1 3.3a4.2 4.2 0 0 1 4 2.9 4 4 0 0 1 4.3 4 4.1 4.1 0 0 1-.4 7.8 4.1 4.1 0 0 1-7 2.7 4.1 4.1 0 0 1-7-2.7 4.1 4.1 0 0 1-.4-7.8 4 4 0 0 1 4.3-4 4.1 4.1 0 0 1 2.2-2.9Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="m8.2 8.3 7.7 4.4m-7.7 2.9 7.7-4.4m-3.8-4.3v8.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>Ask in Frame</div>
+          <h2 id="ask-title">What do you want to know?</h2>
+          <p class="description">Your image is sent to ChatGPT when you ask. The answer appears below.</p>
+          <p class="usage-note">Images and questions go to OpenAI using this site's API account. Please leave out sensitive information.</p>
           <div class="divider"></div>
-          <ol class="steps">
-            <li class="step"><span class="step-number">1</span><span><b>Send your image</b><span>Choose ChatGPT in the share sheet, or we’ll copy it for you.</span></span></li>
-            <li class="step"><span class="step-number">2</span><span><b>Ask what you want to know</b><span>Read text, identify an object, or make sense of a screen.</span></span></li>
-          </ol>
-          <button class="send-button" id="sendButton" type="button" disabled>
+          <form id="askForm" class="chat-form">
+            <label class="question-label" for="questionInput">Your question</label>
+            <textarea class="question-input" id="questionInput" placeholder="Ask about the image…" maxlength="3000" disabled></textarea>
+          <button class="send-button" id="sendButton" type="submit" disabled>
             <span id="sendLabel">Choose an image first</span>
             <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h11m-4.5-4.5L15 10l-4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <p class="action-note" id="actionNote" aria-live="polite">Your image is handled in your browser. It isn’t uploaded here.</p>
+          </form>
+          <div class="conversation" id="conversation" aria-live="polite" aria-label="Conversation"></div>
+          <p class="action-note" id="actionNote" aria-live="polite">Your image stays here until you ask. It is sent securely for analysis.</p>
         </aside>
       </section>
 
       <div class="below">
-        <span><strong>Continue as a guest.</strong> No account needed; this page doesn’t store your screenshots.</span>
+        <span><strong>Continue as a guest.</strong> No account needed. Your screenshot isn’t stored by this page.</span>
         <span><kbd class="key">⌘</kbd><kbd class="key">O</kbd> / <kbd class="key">Ctrl</kbd><kbd class="key">O</kbd> to choose a file</span>
       </div>
     </main>
@@ -224,10 +236,16 @@
     const rotateButton = document.getElementById('rotateButton');
     const removeButton = document.getElementById('removeButton');
     const downloadButton = document.getElementById('downloadButton');
+    const askForm = document.getElementById('askForm');
+    const questionInput = document.getElementById('questionInput');
+    const conversationPanel = document.getElementById('conversation');
+    const API_URL = 'https://frame-ask-api.grahamwe4.chatgpt.site';
     let imageFile = null;
     let imageUrl = null;
     let zoom = 1;
     let rotation = 0;
+    let conversation = [];
+    let isAsking = false;
 
     function announce(message) { actionNote.textContent = message; }
     function updateTransform() {
@@ -241,6 +259,8 @@
       }
       if (imageUrl) URL.revokeObjectURL(imageUrl);
       imageFile = file;
+      conversation = [];
+      conversationPanel.replaceChildren();
       imageUrl = URL.createObjectURL(file);
       imageView.src = imageUrl;
       imageView.alt = file.name ? `Preview of ${file.name}` : 'Selected image preview';
@@ -252,13 +272,14 @@
       imageMeta.textContent = `${file.name || 'Pasted image'} · ${size}`;
       imageMeta.title = file.name || 'Pasted image';
       sendButton.disabled = false;
-      sendLabel.textContent = 'Open ChatGPT with this image';
+      questionInput.disabled = false;
+      sendLabel.textContent = 'Ask ChatGPT about it';
       zoomIn.disabled = false;
       zoomOut.disabled = false;
       rotateButton.disabled = false;
       removeButton.disabled = false;
       downloadButton.disabled = false;
-      announce('Ready. On desktop, the image will be copied before ChatGPT opens.');
+      announce('Ready. Ask a question and ChatGPT will answer here.');
     }
     function clearImage() {
       if (imageUrl) URL.revokeObjectURL(imageUrl);
@@ -274,24 +295,49 @@
       updateTransform();
       sendButton.disabled = true;
       sendLabel.textContent = 'Choose an image first';
+      questionInput.disabled = true;
+      questionInput.value = '';
+      conversation = [];
+      conversationPanel.replaceChildren();
       zoomIn.disabled = true;
       zoomOut.disabled = true;
       rotateButton.disabled = true;
       removeButton.disabled = true;
       downloadButton.disabled = true;
       fileInput.value = '';
-      announce('Your image is handled in your browser. It isn’t uploaded here.');
+      announce('Your image stays here until you ask. It is sent securely for analysis.');
     }
-    function imageAsPng(file) {
-      return createImageBitmap(file).then(bitmap => new Promise((resolve, reject) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        const context = canvas.getContext('2d');
-        context.drawImage(bitmap, 0, 0);
-        bitmap.close();
-        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not prepare the image')), 'image/png');
-      }));
+    function addMessage(role, content) {
+      const article = document.createElement('article');
+      article.className = `message ${role}`;
+      const label = document.createElement('div');
+      label.className = 'message-label';
+      label.textContent = role === 'assistant' ? 'ChatGPT' : 'You';
+      const body = document.createElement('div');
+      body.className = 'message-body';
+      body.textContent = content;
+      article.append(label, body);
+      conversationPanel.append(article);
+      conversationPanel.scrollTop = conversationPanel.scrollHeight;
+    }
+    async function imageAsDataUrl(file) {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d', { alpha: false });
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const blob = await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('Could not prepare the image')), 'image/jpeg', .9));
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read the image'));
+        reader.readAsDataURL(blob);
+      });
     }
 
     chooseButton.addEventListener('click', () => fileInput.click());
@@ -330,39 +376,39 @@
       link.click();
     });
 
-    sendButton.addEventListener('click', async () => {
-      if (!imageFile) return;
+    askForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!imageFile || isAsking) return;
       if (imageFile.size > 20 * 1024 * 1024) {
-        announce('This image is over ChatGPT’s 20 MB image limit. You can still open ChatGPT and attach a smaller copy.');
-      }
-      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [imageFile] })) {
-        try {
-          announce('Choose ChatGPT from your share sheet to send the image.');
-          await navigator.share({ files: [imageFile], title: 'Ask ChatGPT about this image' });
-          announce('Shared. You can add your question in ChatGPT.');
-        } catch (error) {
-          if (error.name === 'AbortError') announce('Share cancelled. Your image is still here.');
-          else announce('Sharing wasn’t available. Try downloading the image and attaching it in ChatGPT.');
-        }
+        announce('This image is over 20 MB. Choose a smaller image to ask about it.');
         return;
       }
-
-      const chatTab = window.open('about:blank', '_blank');
-      if (!chatTab) {
-        announce('Allow pop-ups for this page to open ChatGPT. Your image is still ready here.');
-        return;
-      }
-      chatTab.opener = null;
-      announce('Copying your image…');
+      const question = questionInput.value.trim() || 'What is in this image?';
+      isAsking = true;
+      sendButton.disabled = true;
+      sendLabel.textContent = 'Looking closely…';
+      announce('ChatGPT is looking at your image…');
       try {
-        const png = await imageAsPng(imageFile);
-        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Image clipboard is unavailable');
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-        chatTab.location.replace('https://chatgpt.com/');
-        announce('ChatGPT is open in a new tab. Paste your image with Ctrl+V or ⌘V.');
+        const image = await imageAsDataUrl(imageFile);
+        const response = await fetch(`${API_URL}/api/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image, question, history: conversation.slice(-10) })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'ChatGPT could not answer just now. Please try again.');
+        if (typeof result.answer !== 'string' || !result.answer.trim()) throw new Error('ChatGPT returned an empty answer. Please try again.');
+        conversation.push({ role: 'user', content: question }, { role: 'assistant', content: result.answer });
+        addMessage('user', question);
+        addMessage('assistant', result.answer);
+        questionInput.value = '';
+        announce('Answer ready. Ask a follow-up about the same image.');
       } catch (error) {
-        chatTab.location.replace('https://chatgpt.com/');
-        announce('ChatGPT is open in a new tab. Use + to attach the image, or download it here first.');
+        announce(error instanceof TypeError ? 'Could not reach ChatGPT. Check your connection and try again.' : error.message);
+      } finally {
+        isAsking = false;
+        sendButton.disabled = !imageFile;
+        sendLabel.textContent = imageFile ? 'Ask ChatGPT about it' : 'Choose an image first';
       }
     });
   </script>
