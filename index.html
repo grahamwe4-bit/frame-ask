@@ -246,6 +246,7 @@
     let rotation = 0;
     let conversation = [];
     let isAsking = false;
+    let imageGeneration = 0;
 
     function announce(message) { actionNote.textContent = message; }
     function updateTransform() {
@@ -258,6 +259,7 @@
         return;
       }
       if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageGeneration += 1;
       imageFile = file;
       conversation = [];
       conversationPanel.replaceChildren();
@@ -271,8 +273,8 @@
       const size = file.size < 1024 * 1024 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
       imageMeta.textContent = `${file.name || 'Pasted image'} · ${size}`;
       imageMeta.title = file.name || 'Pasted image';
-      sendButton.disabled = false;
-      questionInput.disabled = false;
+      sendButton.disabled = isAsking;
+      questionInput.disabled = isAsking;
       sendLabel.textContent = 'Ask ChatGPT about it';
       zoomIn.disabled = false;
       zoomOut.disabled = false;
@@ -283,6 +285,7 @@
     }
     function clearImage() {
       if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageGeneration += 1;
       imageUrl = null;
       imageFile = null;
       imageView.removeAttribute('src');
@@ -384,12 +387,14 @@
         return;
       }
       const question = questionInput.value.trim() || 'What is in this image?';
+      const requestFile = imageFile;
+      const requestGeneration = imageGeneration;
       isAsking = true;
       sendButton.disabled = true;
       sendLabel.textContent = 'Looking closely…';
       announce('ChatGPT is looking at your image…');
       try {
-        const image = await imageAsDataUrl(imageFile);
+        const image = await imageAsDataUrl(requestFile);
         const response = await fetch(`${API_URL}/api/ask`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -398,16 +403,19 @@
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'ChatGPT could not answer just now. Please try again.');
         if (typeof result.answer !== 'string' || !result.answer.trim()) throw new Error('ChatGPT returned an empty answer. Please try again.');
+        if (requestGeneration !== imageGeneration || imageFile !== requestFile) return;
         conversation.push({ role: 'user', content: question }, { role: 'assistant', content: result.answer });
         addMessage('user', question);
         addMessage('assistant', result.answer);
         questionInput.value = '';
         announce('Answer ready. Ask a follow-up about the same image.');
       } catch (error) {
+        if (requestGeneration !== imageGeneration || imageFile !== requestFile) return;
         announce(error instanceof TypeError ? 'Could not reach ChatGPT. Check your connection and try again.' : error.message);
       } finally {
         isAsking = false;
         sendButton.disabled = !imageFile;
+        questionInput.disabled = !imageFile;
         sendLabel.textContent = imageFile ? 'Ask ChatGPT about it' : 'Choose an image first';
       }
     });
