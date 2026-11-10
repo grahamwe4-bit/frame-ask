@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ee">
+  <meta name="description" content="Preview a screenshot, then send it to ChatGPT in a couple of clicks.">
+  <title>Frame — see it, ask it</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23171918'/%3E%3Cpath d='M12 17v-5h5M28 17v-5h-5M12 23v5h5M28 23v5h-5' fill='none' stroke='%23d6ff6b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%23d6ff6b'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171918;
+      --muted: #777b73;
+      --line: #dedfd7;
+      --paper: #f4f3ee;
+      --card: #fbfbf8;
+      --lime: #d6ff6b;
+      --lime-dark: #b3dc4f;
+      --soft: #eeeee8;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--paper); color: var(--ink); }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .app { min-height: 100vh; display: flex; flex-direction: column; }
+    .topbar { height: 76px; padding: 0 clamp(20px, 5vw, 76px); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(30,34,29,.08); }
+    .topbar-actions { display: flex; align-items: center; gap: 22px; }
+    .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; color: inherit; }
+    .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: var(--ink); color: var(--lime); }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-name { font-weight: 680; letter-spacing: -.045em; font-size: 17px; }
+    .brand-name span { color: var(--muted); font-weight: 480; }
+    .privacy-tag { display: flex; align-items: center; gap: 8px; color: #565a53; font-size: 12px; font-weight: 560; letter-spacing: .01em; }
+    .privacy-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #83aa31; box-shadow: 0 0 0 3px rgba(131,170,49,.13); }
+    .guest-link { display: inline-flex; align-items: center; gap: 9px; padding: 10px 13px; border-radius: 9px; background: var(--lime); color: #25291f; text-decoration: none; font-size: 11px; font-weight: 690; transition: background .15s ease, transform .15s ease; }
+    .guest-link:hover { background: var(--lime-dark); transform: translateY(-1px); }
+    .guest-link svg { width: 13px; height: 13px; }
+    main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: clamp(42px, 7vw, 84px) 0 56px; flex: 1; }
+    .intro { max-width: 720px; margin-bottom: 34px; }
+    .eyebrow { display: flex; align-items: center; gap: 9px; margin-bottom: 17px; color: #72766d; font-size: 11px; font-weight: 680; letter-spacing: .13em; text-transform: uppercase; }
+    .eyebrow-line { width: 24px; height: 1px; background: #9eaa87; }
+    h1 { margin: 0; font-size: clamp(36px, 5.3vw, 61px); line-height: .99; font-weight: 570; letter-spacing: -.067em; }
+    h1 em { font-style: normal; color: #818678; }
+    .subhead { color: #666a63; margin: 17px 0 0; line-height: 1.6; font-size: 15px; max-width: 540px; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.56fr) minmax(280px, .78fr); gap: 18px; align-items: stretch; }
+    .preview-card, .ask-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 35px rgba(31,37,24,.035); }
+    .preview-card { min-width: 0; padding: 17px; display: flex; flex-direction: column; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 1px 3px 16px; }
+    .panel-label { color: #777c72; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .image-meta { color: #96988f; font-size: 11px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stage { position: relative; min-height: 380px; flex: 1; display: grid; place-items: center; overflow: hidden; border: 1px dashed #d4d7cb; border-radius: 12px; background-color: #f1f1eb; background-image: radial-gradient(#dfe1d7 1px, transparent 1px); background-size: 17px 17px; }
+    .stage.dragging { border-color: #86a92e; background-color: #eff4e1; }
+    .empty-state { text-align: center; padding: 28px; max-width: 360px; transition: opacity .2s ease; }
+    .empty-illustration { position: relative; width: 132px; height: 112px; margin: 0 auto 20px; }
+    .illustration-back { position: absolute; top: 7px; left: 9px; width: 105px; height: 76px; border: 1px solid #d5d8cb; border-radius: 8px; background: #fafaf5; transform: rotate(-8deg); }
+    .illustration-front { position: absolute; top: 15px; left: 24px; width: 101px; height: 78px; border: 1px solid #d7dacd; border-radius: 9px; background: #fbfcf8; box-shadow: 0 7px 18px rgba(40,45,34,.08); transform: rotate(4deg); }
+    .illustration-sun { position: absolute; top: 10px; right: 13px; width: 21px; height: 21px; border-radius: 50%; background: #e7eeca; }
+    .illustration-mountain { position: absolute; left: 10px; bottom: 9px; width: 77px; height: 38px; background: #dbe6bc; clip-path: polygon(0 100%, 34% 18%, 54% 59%, 73% 0, 100% 100%); }
+    .illustration-spark { position: absolute; right: 0; bottom: 8px; width: 29px; height: 29px; display: grid; place-items: center; color: #789637; background: var(--lime); border: 3px solid var(--paper); border-radius: 50%; font-size: 17px; }
+    .empty-state h2 { margin: 0; font-size: 16px; font-weight: 610; letter-spacing: -.02em; }
+    .empty-state p { margin: 8px 0 18px; color: #7c8076; font-size: 12px; line-height: 1.55; }
+    .choose-button { border: 1px solid #cfd2c7; border-radius: 9px; padding: 10px 15px; background: #fff; font-size: 12px; font-weight: 620; cursor: pointer; transition: .15s ease; }
+    .choose-button:hover { border-color: #a4b77b; background: #fbfff2; transform: translateY(-1px); }
+    .paste-hint { display: block; margin-top: 12px; color: #92958c; font-size: 10px; }
+    #imageView { display: none; max-width: 100%; max-height: 500px; object-fit: contain; transition: transform .18s ease; box-shadow: 0 12px 33px rgba(24,27,21,.13); }
+    .stage.has-image { background-image: none; background-color: #e8e9e3; }
+    .stage.has-image #imageView { display: block; }
+    .stage.has-image .empty-state { display: none; }
+    .image-tools { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 3px 0; }
+    .tools-left, .tools-right { display: flex; align-items: center; gap: 6px; }
+    .tool-button { width: 31px; height: 31px; display: inline-grid; place-items: center; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #6f736b; cursor: pointer; }
+    .tool-button:hover:not(:disabled) { border-color: var(--line); background: #fff; color: var(--ink); }
+    .tool-button:disabled { opacity: .33; cursor: default; }
+    .tool-button svg { width: 15px; height: 15px; }
+    .zoom-readout { width: 38px; text-align: center; color: #767b71; font-size: 10px; font-variant-numeric: tabular-nums; }
+    .text-button { border: 0; background: transparent; color: #797d73; font-size: 11px; cursor: pointer; }
+    .text-button:hover:not(:disabled) { color: #bc4d3c; }
+    .ask-card { padding: 24px; display: flex; flex-direction: column; }
+    .ask-topline { display: flex; align-items: center; gap: 9px; color: #73786e; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+    .chatgpt-mark { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #daddd3; border-radius: 50%; color: #282b26; }
+    .chatgpt-mark svg { width: 13px; height: 13px; }
+    .ask-card h2 { margin: 25px 0 9px; font-size: 24px; line-height: 1.12; font-weight: 580; letter-spacing: -.045em; }
+    .ask-card .description { margin: 0; color: #777b73; font-size: 12px; line-height: 1.65; }
+    .divider { height: 1px; background: #e8e9e2; margin: 24px 0 20px; }
+    .steps { display: grid; gap: 15px; padding: 0; margin: 0; list-style: none; }
+    .step { display: grid; grid-template-columns: 25px 1fr; gap: 10px; align-items: start; color: #777b73; font-size: 11px; line-height: 1.5; }
+    .step-number { width: 23px; height: 23px; display: grid; place-items: center; border: 1px solid #e1e3da; border-radius: 50%; color: #54594d; font-size: 10px; font-weight: 650; }
+    .step b { display: block; color: #353832; font-size: 11px; font-weight: 620; margin: 2px 0 1px; }
+    .step span { display: block; }
+    .send-button { width: 100%; margin-top: auto; padding: 14px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 0; border-radius: 10px; background: var(--ink); color: white; font-size: 13px; font-weight: 620; cursor: pointer; transition: .15s ease; }
+    .send-button:hover:not(:disabled) { background: #2d322b; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(28,34,24,.15); }
+    .send-button:disabled { cursor: not-allowed; opacity: .45; }
+    .send-button svg { width: 16px; height: 16px; }
+    .action-note { min-height: 28px; margin: 10px 2px 0; color: #85897f; font-size: 10px; line-height: 1.45; text-align: center; }
+    .below { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 19px; color: #8b8e85; font-size: 10px; line-height: 1.5; }
+    .below strong { color: #64695f; font-weight: 590; }
+    .key { padding: 3px 6px; border: 1px solid #daddd3; border-radius: 5px; color: #71766c; background: rgba(255,255,255,.5); font-family: inherit; font-size: 9px; }
+    .footer { padding: 18px clamp(20px, 5vw, 76px) 24px; border-top: 1px solid rgba(30,34,29,.07); color: #96998f; font-size: 10px; display: flex; justify-content: space-between; gap: 16px; }
+    .footer a { color: inherit; text-decoration: none; }
+    .footer a:hover { color: #4a5043; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 790px) {
+      main { width: min(660px, calc(100% - 30px)); padding-top: 47px; }
+      .workspace { grid-template-columns: 1fr; }
+      .stage { min-height: 320px; }
+      #imageView { max-height: 420px; }
+      .ask-card { min-height: 400px; }
+    }
+    @media (max-width: 480px) {
+      .topbar { height: 64px; padding: 0 17px; }
+      .brand-name { font-size: 15px; }
+      .privacy-tag { display: none; }
+      .topbar-actions { gap: 0; }
+      .guest-link { padding: 9px 10px; font-size: 10px; }
+      main { width: calc(100% - 24px); padding: 38px 0 35px; }
+      .intro { margin-bottom: 25px; }
+      h1 { font-size: 42px; }
+      .subhead { font-size: 13px; margin-top: 13px; }
+      .preview-card { padding: 12px; border-radius: 15px; }
+      .stage { min-height: 285px; }
+      .ask-card { min-height: 390px; padding: 20px; border-radius: 15px; }
+      .below { align-items: flex-start; flex-direction: column; gap: 7px; }
+      .footer { padding: 16px 17px 21px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Frame home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7.5 9V6.5H10M16.5 9V6.5H14M7.5 15v2.5H10M16.5 15v2.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.3" fill="currentColor"/></svg></span>
+        <span class="brand-name">frame <span>/ ask</span></span>
+      </a>
+      <div class="topbar-actions">
+        <div class="privacy-tag"><i class="privacy-dot"></i><span>Image stays on this device</span></div>
+        <a class="guest-link" href="#viewer">Continue as guest <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3.5 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div class="eyebrow"><span class="eyebrow-line"></span>See it. Ask it.</div>
+        <h1 id="page-title">A closer look,<br><em>with ChatGPT.</em></h1>
+        <p class="subhead">Drop in a screenshot or photo. No sign-in needed. We’ll help you get it into a ChatGPT chat, ready for your question.</p>
+      </section>
+
+      <section class="workspace" id="viewer" aria-label="Screenshot viewer">
+        <div class="preview-card">
+          <div class="panel-head">
+            <span class="panel-label">Image preview</span>
+            <span class="image-meta" id="imageMeta">Nothing selected</span>
+          </div>
+          <div class="stage" id="stage" tabindex="0" aria-label="Image preview. Drop an image or paste one here.">
+            <div class="empty-state">
+              <div class="empty-illustration" aria-hidden="true">
+                <div class="illustration-back"></div>
+                <div class="illustration-front"><div class="illustration-sun"></div><div class="illustration-mountain"></div></div>
+                <div class="illustration-spark">✳</div>
+              </div>
+              <h2>Bring an image into focus</h2>
+              <p>Drop a screenshot here, paste one from your clipboard, or choose a file.</p>
+              <button class="choose-button" id="chooseButton" type="button">Choose an image</button>
+              <span class="paste-hint">Tip: you can also press <kbd class="key">⌘</kbd><kbd class="key">V</kbd> or <kbd class="key">Ctrl</kbd><kbd class="key">V</kbd></span>
+            </div>
+            <img id="imageView" alt="Selected image preview">
+          </div>
+          <div class="image-tools" aria-label="Image controls">
+            <div class="tools-left">
+              <button class="tool-button" id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out" disabled><svg viewBox="0 0 20 20" fill="none"><circle cx="8.6" cy="8.6" r="5.7" stroke="currentColor" stroke-width="1.5"/><path d="m13 13 4 4M6.2 8.6h4.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+              <span class="zoom-readout" id="zoomReadout">100%</span>
+              <button class="tool-button" id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in" disabled><svg viewBox="0 0 20 20" fill="none"><circle cx="8.6" cy="8.6" r="5.7" stroke="currentColor" stroke-width="1.5"/><path d="m13 13 4 4M8.6 6.2v4.8M6.2 8.6h4.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+              <button class="tool-button" id="rotateButton" type="button" aria-label="Rotate image" title="Rotate image" disabled><svg viewBox="0 0 20 20" fill="none"><path d="M15.8 8A6.2 6.2 0 0 0 5 5.2L3.4 7M3.4 7V3.9M3.4 7h3.1M4.2 12a6.2 6.2 0 0 0 10.8 2.8l1.6-1.8M16.6 13v3.1m0-3.1h-3.1" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="tools-right">
+              <button class="text-button" id="downloadButton" type="button" disabled>Download</button>
+              <button class="text-button" id="removeButton" type="button" disabled>Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="ask-card" aria-labelledby="ask-title">
+          <div class="ask-topline"><span class="chatgpt-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12.1 3.3a4.2 4.2 0 0 1 4 2.9 4 4 0 0 1 4.3 4 4.1 4.1 0 0 1-.4 7.8 4.1 4.1 0 0 1-7 2.7 4.1 4.1 0 0 1-7-2.7 4.1 4.1 0 0 1-.4-7.8 4 4 0 0 1 4.3-4 4.1 4.1 0 0 1 2.2-2.9Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="m8.2 8.3 7.7 4.4m-7.7 2.9 7.7-4.4m-3.8-4.3v8.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>ChatGPT handoff</div>
+          <h2 id="ask-title">Ready to ask about it?</h2>
+          <p class="description">Your image is copied, then ChatGPT opens in a new tab. Paste it into the message box and ask anything.</p>
+          <div class="divider"></div>
+          <ol class="steps">
+            <li class="step"><span class="step-number">1</span><span><b>Send your image</b><span>Choose ChatGPT in the share sheet, or we’ll copy it for you.</span></span></li>
+            <li class="step"><span class="step-number">2</span><span><b>Ask what you want to know</b><span>Read text, identify an object, or make sense of a screen.</span></span></li>
+          </ol>
+          <button class="send-button" id="sendButton" type="button" disabled>
+            <span id="sendLabel">Choose an image first</span>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h11m-4.5-4.5L15 10l-4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <p class="action-note" id="actionNote" aria-live="polite">Your image is handled in your browser. It isn’t uploaded here.</p>
+        </aside>
+      </section>
+
+      <div class="below">
+        <span><strong>Continue as a guest.</strong> No account needed; this page doesn’t store your screenshots.</span>
+        <span><kbd class="key">⌘</kbd><kbd class="key">O</kbd> / <kbd class="key">Ctrl</kbd><kbd class="key">O</kbd> to choose a file</span>
+      </div>
+    </main>
+
+    <footer class="footer"><span>Frame / ask</span><span>Made for the things you want to look closer at.</span></footer>
+    <input class="sr-only" id="fileInput" type="file" accept="image/*" aria-label="Choose image">
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const chooseButton = document.getElementById('chooseButton');
+    const stage = document.getElementById('stage');
+    const imageView = document.getElementById('imageView');
+    const imageMeta = document.getElementById('imageMeta');
+    const sendButton = document.getElementById('sendButton');
+    const sendLabel = document.getElementById('sendLabel');
+    const actionNote = document.getElementById('actionNote');
+    const zoomReadout = document.getElementById('zoomReadout');
+    const zoomIn = document.getElementById('zoomIn');
+    const zoomOut = document.getElementById('zoomOut');
+    const rotateButton = document.getElementById('rotateButton');
+    const removeButton = document.getElementById('removeButton');
+    const downloadButton = document.getElementById('downloadButton');
+    let imageFile = null;
+    let imageUrl = null;
+    let zoom = 1;
+    let rotation = 0;
+
+    function announce(message) { actionNote.textContent = message; }
+    function updateTransform() {
+      imageView.style.transform = `scale(${zoom}) rotate(${rotation}deg)`;
+      zoomReadout.textContent = `${Math.round(zoom * 100)}%`;
+    }
+    function setImage(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        announce('Choose an image file to get started.');
+        return;
+      }
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageFile = file;
+      imageUrl = URL.createObjectURL(file);
+      imageView.src = imageUrl;
+      imageView.alt = file.name ? `Preview of ${file.name}` : 'Selected image preview';
+      stage.classList.add('has-image');
+      zoom = 1;
+      rotation = 0;
+      updateTransform();
+      const size = file.size < 1024 * 1024 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      imageMeta.textContent = `${file.name || 'Pasted image'} · ${size}`;
+      imageMeta.title = file.name || 'Pasted image';
+      sendButton.disabled = false;
+      sendLabel.textContent = 'Open ChatGPT with this image';
+      zoomIn.disabled = false;
+      zoomOut.disabled = false;
+      rotateButton.disabled = false;
+      removeButton.disabled = false;
+      downloadButton.disabled = false;
+      announce('Ready. On desktop, the image will be copied before ChatGPT opens.');
+    }
+    function clearImage() {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageUrl = null;
+      imageFile = null;
+      imageView.removeAttribute('src');
+      imageView.alt = 'Selected image preview';
+      stage.classList.remove('has-image');
+      imageMeta.textContent = 'Nothing selected';
+      imageMeta.removeAttribute('title');
+      zoom = 1;
+      rotation = 0;
+      updateTransform();
+      sendButton.disabled = true;
+      sendLabel.textContent = 'Choose an image first';
+      zoomIn.disabled = true;
+      zoomOut.disabled = true;
+      rotateButton.disabled = true;
+      removeButton.disabled = true;
+      downloadButton.disabled = true;
+      fileInput.value = '';
+      announce('Your image is handled in your browser. It isn’t uploaded here.');
+    }
+    function imageAsPng(file) {
+      return createImageBitmap(file).then(bitmap => new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not prepare the image')), 'image/png');
+      }));
+    }
+
+    chooseButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', event => setImage(event.target.files[0]));
+    stage.addEventListener('dragover', event => { event.preventDefault(); stage.classList.add('dragging'); });
+    stage.addEventListener('dragleave', () => stage.classList.remove('dragging'));
+    stage.addEventListener('drop', event => {
+      event.preventDefault();
+      stage.classList.remove('dragging');
+      const file = [...(event.dataTransfer?.files || [])].find(item => item.type.startsWith('image/'));
+      if (file) setImage(file);
+      else announce('Drop an image file to preview it.');
+    });
+    document.addEventListener('paste', event => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))) return;
+      const item = [...(event.clipboardData?.items || [])].find(entry => entry.type.startsWith('image/'));
+      if (item) {
+        const file = item.getAsFile();
+        if (file) { event.preventDefault(); setImage(file); }
+      }
+    });
+    document.addEventListener('keydown', event => {
+      const modifier = event.metaKey || event.ctrlKey;
+      if (modifier && event.key.toLowerCase() === 'o') { event.preventDefault(); fileInput.click(); }
+    });
+    zoomIn.addEventListener('click', () => { zoom = Math.min(2, zoom + .1); updateTransform(); });
+    zoomOut.addEventListener('click', () => { zoom = Math.max(.5, zoom - .1); updateTransform(); });
+    rotateButton.addEventListener('click', () => { rotation = (rotation + 90) % 360; updateTransform(); });
+    removeButton.addEventListener('click', clearImage);
+    downloadButton.addEventListener('click', () => {
+      if (!imageFile) return;
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.download = imageFile.name || 'screenshot';
+      link.click();
+    });
+
+    sendButton.addEventListener('click', async () => {
+      if (!imageFile) return;
+      if (imageFile.size > 20 * 1024 * 1024) {
+        announce('This image is over ChatGPT’s 20 MB image limit. You can still open ChatGPT and attach a smaller copy.');
+      }
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [imageFile] })) {
+        try {
+          announce('Choose ChatGPT from your share sheet to send the image.');
+          await navigator.share({ files: [imageFile], title: 'Ask ChatGPT about this image' });
+          announce('Shared. You can add your question in ChatGPT.');
+        } catch (error) {
+          if (error.name === 'AbortError') announce('Share cancelled. Your image is still here.');
+          else announce('Sharing wasn’t available. Try downloading the image and attaching it in ChatGPT.');
+        }
+        return;
+      }
+
+      const chatTab = window.open('about:blank', '_blank');
+      if (!chatTab) {
+        announce('Allow pop-ups for this page to open ChatGPT. Your image is still ready here.');
+        return;
+      }
+      chatTab.opener = null;
+      announce('Copying your image…');
+      try {
+        const png = await imageAsPng(imageFile);
+        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Image clipboard is unavailable');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+        chatTab.location.replace('https://chatgpt.com/');
+        announce('ChatGPT is open in a new tab. Paste your image with Ctrl+V or ⌘V.');
+      } catch (error) {
+        chatTab.location.replace('https://chatgpt.com/');
+        announce('ChatGPT is open in a new tab. Use + to attach the image, or download it here first.');
+      }
+    });
+  </script>
+</body>
+</html>
